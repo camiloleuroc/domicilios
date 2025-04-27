@@ -28,6 +28,11 @@ class LocationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         location = Location.objects.create(**validated_data)
         return location
+    
+    @classmethod
+    def get_user_location(cls, user):
+        """Fetches all locations associated with the provided user."""
+        return Location.objects.filter(user=user)
 
 class ServiceRequestSerializer(serializers.ModelSerializer):
     """Serializer for service requests"""
@@ -40,5 +45,5 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at', 'is_completed')
 
     def create(self, validated_data):
-        service = service_request = ServiceRequest.objects.create(**validated_data)
+        service = ServiceRequest.objects.create(**validated_data)
         return service
