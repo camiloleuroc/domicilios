@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import User, Location, ServiceRequest
 
 class UserSerializer(serializers.ModelSerializer):
+    """Serializer for user registration"""
     password = serializers.CharField(write_only=True)
 
     class Meta:
@@ -18,6 +19,7 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 class LocationSerializer(serializers.ModelSerializer):
+    """Serializer for location data"""
     class Meta:
         model = Location
         fields = ('id', 'user', 'address', 'latitude', 'longitude', 'created_at')
@@ -28,6 +30,7 @@ class LocationSerializer(serializers.ModelSerializer):
         return location
 
 class ServiceRequestSerializer(serializers.ModelSerializer):
+    """Serializer for service requests"""
     customer = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
     driver = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False, allow_null=True)
 

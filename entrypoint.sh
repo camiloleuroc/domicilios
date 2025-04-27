@@ -11,3 +11,6 @@ python delivery/manage.py migrate
 
 # Run the service.
 exec gunicorn delivery.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+
+# Run tests.
+# python delivery/manage.py test
