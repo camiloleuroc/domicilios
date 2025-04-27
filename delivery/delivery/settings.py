@@ -50,10 +50,10 @@ REST_FRAMEWORK = {
     )
 }
 
-# Configuracion SimpleJWT
+# SimpleJWT Config
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  # Token vence en 15 minutes
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),     # Refresh token vence en 1 día
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  # Token expires in 15 minutes
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),     # Refresh token expires in 1 day
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),

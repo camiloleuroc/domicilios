@@ -2,12 +2,12 @@
 
 export PYTHONPATH=/app/delivery
 
-# Espera a a que la base de datos esté lista
+# Wait until the database is ready.
 ./wait-for-it.sh db:5432 --timeout=60 --strict -- echo "PostgreSQL is up!"
 
-# Realiza las migraciones respectivas del aplicativo
+# Performs the respective migrations of the application.
 python delivery/manage.py makemigrations
 python delivery/manage.py migrate
 
-# Ejecuta el servicio
+# Run the service.
 exec gunicorn delivery.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
