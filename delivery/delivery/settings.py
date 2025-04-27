@@ -49,7 +49,7 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     )
 }
-
+AUTH_USER_MODEL = 'services.User'
 # SimpleJWT Config
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  # Token expires in 15 minutes
