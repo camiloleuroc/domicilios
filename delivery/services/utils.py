@@ -1,5 +1,5 @@
 import math
-from .models import Location
+from .models import Location, ServiceRequest
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     """Calculate the Haversine distance between two points (in kilometers)."""
@@ -28,10 +28,16 @@ def estimated_time(distance_km):
 def nearest_driver(pickup_latitude, pickup_longitude):
         """Find the nearest driver based on the pickup location."""
 
-        # Bring only the addresses of the most recent drivers.
+        # Bring in the IDs of drivers who already have an active (not completed) service.
+        busy_driver_ids = ServiceRequest.objects.filter(
+            is_completed=False
+        ).values_list('driver_id', flat=True)
+
+        # Get the most recent locations of available drivers (that are not occupied)
         drivers = (
             Location.objects
             .filter(user__is_driver=True)
+            .exclude(user_id__in=busy_driver_ids)
             .order_by('user', '-created_at')
             .distinct('user')
         )
