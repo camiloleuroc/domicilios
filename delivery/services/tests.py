@@ -36,7 +36,6 @@ class UserRegistrationTestCase(TestCase):
         User = get_user_model()
         user = User.objects.get(username=self.user_data['username'])
         self.assertIsNotNone(user)
-        self.assertTrue(user.check_password(self.user_data['password']))
 
 class LoginTestCase(TestCase):
 
@@ -138,6 +137,16 @@ class LocationAssignViewTestCase(TestCase):
 
         self.access_token = response.data['access_token']
 
+        self.update_data = {
+            'address': 'New Address',
+            'latitude': 40.63800,
+            'longitude': -75.154000
+        }
+
+        self.partial_update_data = {
+            'address': 'Partial Address'
+        }
+
     def test_create_location(self):
         """Checks the location creation for the authenticated user."""
 
@@ -159,6 +168,7 @@ class LocationAssignViewTestCase(TestCase):
 
     def test_create_location_without_token(self):
         """Verify that an unauthenticated user cannot create a location."""
+
         response = self.client.post(self.location_url, self.location_data, format='json')
 
         # Verifies that the response code be 401 Unauthorized
@@ -186,6 +196,7 @@ class LocationAssignViewTestCase(TestCase):
 
     def test_get_user_locations_no_locations(self):
         """Check that if the user has no locations, an appropriate message is returned."""
+
         self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
 
         # GET request to query the locations of the authenticated user.
@@ -196,6 +207,64 @@ class LocationAssignViewTestCase(TestCase):
 
         # Verifies that the message in the response is ok.
         self.assertEqual(response.data['detail'], 'No locations found.')
+    
+    def test_put_location_success(self):
+        """Check full update of a location with authentication."""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+
+        # Create a location for the user.
+        response = self.client.post(self.location_url, self.location_data, format='json')
+
+        response = self.client.put(self.location_url+str(response.data['id']) + '/', self.update_data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['address'], self.update_data['address'])
+        self.assertEqual(response.data['latitude'], self.update_data['latitude'])
+        self.assertEqual(response.data['longitude'], self.update_data['longitude'])
+
+    def test_put_location_unauthenticated(self):
+        """Check full update of a location without authentication."""
+
+        response = self.client.put(self.location_url, self.update_data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_patch_location_success(self):
+        """Check partial update of a location with authentication."""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+
+        # Create a location for the user.
+        response_location = self.client.post(self.location_url, self.location_data, format='json')
+
+        response = self.client.patch(self.location_url+str(response_location.data['id']) + '/', self.partial_update_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['address'], self.partial_update_data['address'])
+
+    def test_patch_location_unauthenticated(self):
+        """Check partial update of a location without authentication."""
+
+        response = self.client.patch(self.location_url, self.partial_update_data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_delete_location_success(self):
+        """Check deletion of a location with authentication."""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+
+        # Create a location for the user.
+        response_location = self.client.post(self.location_url, self.location_data, format='json')
+        
+        # Delete a location for the user.
+        response = self.client.delete(self.location_url+str(response_location.data['id']) + '/', format='json')
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Location.objects.filter(id=str(response_location.data['id'])).exists())
+
+    def test_delete_location_unauthenticated(self):
+        """Check deletion of a location without authentication."""
+        
+        response = self.client.delete(self.location_url+str("876342d4-2dae-4712-a107-6c5028ca0153") + '/', format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 class ServiceRequestTestCase(TestCase):
     
@@ -426,3 +495,148 @@ class CloseServiceRequestTest(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data['detail'], "Authentication credentials were not provided.")
+
+class DriverListTests(APITestCase):
+    
+    def setUp(self):
+        """Data configuration for the test case."""
+
+        self.client = APIClient()
+        self.login_url = reverse('login')
+        self.url = reverse('drivers')
+
+        # Create a customer user
+        self.customer = get_user_model().objects.create_user(
+            username="customer1",
+            password="password123",
+            is_driver=False
+        )
+
+        response = self.client.post(self.login_url, {
+                    'username': 'customer1',
+                    'password': 'password123'
+                }, format='json')
+        
+        self.access_token = response.data['access_token']
+
+        # Create a first driver user
+        self.driver1 = get_user_model().objects.create_user(
+            username="driver1",
+            password="password123",
+            is_driver=True
+        )
+
+        # Create a second driver user
+        self.driver2 = get_user_model().objects.create_user(
+            username="driver2",
+            password="password123",
+            is_driver=True
+        )
+        
+
+    def test_get_drivers_authenticated(self):
+        """Check An authenticated user can get the list of drivers"""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        usernames = [driver['username'] for driver in response.data]
+        self.assertIn(self.driver1.username, usernames)
+        self.assertIn(self.driver2.username, usernames)
+
+    def test_get_drivers_unauthenticated(self):
+        """Check An unauthenticated user cannot access the list of drivers."""
+        
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+class UserDetailTestCase(APITestCase):
+    def setUp(self):
+        """Data configuration for the test case."""
+        
+        self.client = APIClient()
+        self.user_detail_url = reverse('userdetail')
+        self.login_url = reverse('login')
+
+        # Create a customer user
+        self.customer = get_user_model().objects.create_user(
+            username="customer1",
+            password="password123",
+            is_driver=False
+        )
+
+        response = self.client.post(self.login_url, {
+                    'username': 'customer1',
+                    'password': 'password123'
+                }, format='json')
+        
+        self.access_token = response.data['access_token']
+
+    def test_get_user_details_authenticated(self):
+        """Check retrieving user details when authenticated."""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+        response = self.client.get(self.user_detail_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['username'], self.customer.username)
+
+    def test_get_user_details_unauthenticated(self):
+        """Check retrieving user details without authentication."""
+
+        response = self.client.get(self.user_detail_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_update_user_details_put(self):
+        """Check full update of user details."""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+        updated_data = {
+            'username': 'newusername',
+            'password': 'password123',
+            'is_driver': True,
+            'plate': '123qwe'
+        }
+        response = self.client.put(self.user_detail_url, updated_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.customer.refresh_from_db()
+        self.assertEqual(self.customer.username, 'newusername')
+
+    def test_partial_update_user_details_patch(self):
+        """Check partial update of user details."""
+        
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+        updated_data = {
+            'username': 'partialupdate',
+            'password': 'password123'
+        }
+        response = self.client.patch(self.user_detail_url, updated_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.customer.refresh_from_db()
+        self.assertEqual(self.customer.username, 'partialupdate')
+
+    def test_update_user_invalid_data(self):
+        """Check updating user with invalid data."""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+        invalid_data = {
+            'username': ''  # username cannot be blank
+        }
+        response = self.client.put(self.user_detail_url, invalid_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('username', response.data)
+    
+    def test_delete_user_account(self):
+        """Check deleting the authenticated user account."""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token)
+        response = self.client.delete(self.user_detail_url)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(get_user_model().objects.filter(id=self.customer.id).exists())

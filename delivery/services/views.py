@@ -157,7 +157,10 @@ class LocationAssign(APIView):
         except Location.DoesNotExist:
             return Response({"detail": "Location not found or not owned by you."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = LocationSerializer(location, data=request.data, partial=False)  # Full update
+        data = request.data.copy()
+        data['user'] = str(request.user.id)
+
+        serializer = LocationSerializer(location, data=data, partial=False)  # Full update
 
         if serializer.is_valid():
             serializer.save()
