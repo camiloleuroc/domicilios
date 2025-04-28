@@ -27,7 +27,7 @@ python delivery/manage.py test services
 
 Por medio de una terminal de su elección se ejecuta el siguiente comando de docker dentro del directorio para levantar el servicio (verificar que se cuenta con docker instalado y en ejecución):
 ```
-docker compose up –d --build
+docker compose up -d --build
 ```
 
 Este se encargará de crear las imágenes tanto de la base de datos como de la API y levantar los contenedores.
