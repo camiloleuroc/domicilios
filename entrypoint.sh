@@ -10,7 +10,7 @@ python delivery/manage.py makemigrations
 python delivery/manage.py migrate
 
 # Run the service.
-exec gunicorn delivery.asgi:0application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+# exec gunicorn delivery.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 
 # Run tests.
-# python delivery/manage.py test services
+python delivery/manage.py test services
