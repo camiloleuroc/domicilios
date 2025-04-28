@@ -6,6 +6,7 @@ class User(AbstractUser):
     """Custom user model with uuid management"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     is_driver = models.BooleanField(default=False)
+    plate = models.CharField(max_length=8, blank=True, null=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
 class Location(models.Model):
@@ -27,3 +28,4 @@ class ServiceRequest(models.Model):
     time_minutes = models.IntegerField()
     is_completed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    close_at = models.DateTimeField(auto_now_add=True)

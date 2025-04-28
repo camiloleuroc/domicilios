@@ -195,3 +195,129 @@ class LocationAssignViewTestCase(TestCase):
 
         # Verifies that the message in the response is ok.
         self.assertEqual(response.data['detail'], 'No locations found.')
+
+class ServiceRequestTestCase(TestCase):
+    
+    def setUp(self):
+        """Data configuration for the test case."""
+
+        self.client = APIClient()
+
+        self.login_url = reverse('login')
+
+        self.customer = get_user_model().objects.create_user(
+            username='customer1',
+            password='password123',
+            is_driver=False
+        )
+        
+        response = self.client.post(self.login_url, {
+                    'username': 'customer1',
+                    'password': 'password123'
+                }, format='json')
+        
+        self.access_token_customer = response.data['access_token']
+        
+        self.driver_first = get_user_model().objects.create_user(
+            username='driver1',
+            password='password123',
+            is_driver=True
+        )
+
+        response = self.client.post(self.login_url, {
+                    'username': 'driver1',
+                    'password': 'password123'
+                }, format='json')
+        
+        self.access_token_driver = response.data['access_token']
+
+        self.driver_second = get_user_model().objects.create_user(
+            username='driver2',
+            password='password123',
+            is_driver=True
+        )
+
+        # Location for the customer
+        self.customer_location = Location.objects.create(
+            user=self.customer,
+            address='test Address',
+            latitude=10.0,
+            longitude=10.0
+        )
+
+        # Location for the first driver
+        self.driver_first_location = Location.objects.create(
+            user=self.driver_first,
+            address='Driver First Address',
+            latitude=12.1,
+            longitude=12.1
+        )
+
+        # Location for the second driver
+        self.driver_second_location = Location.objects.create(
+            user=self.driver_second,
+            address='Driver Second Address',
+            latitude=9.1,
+            longitude=9.1
+        )
+
+        self.url = reverse('delivery')
+
+    def test_create_service_request_success(self):
+        """Check successful creation of a service request by a non-driver user."""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token_customer)
+
+        data = {}  # No pickup_location is sent, the view picks it up automatically.
+
+        response = self.client.post(self.url, data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['driver']['username'], self.driver_second.username)
+        self.assertIsNotNone(response.data['estimated_time_minutes'])
+
+    def test_driver_cannot_create_service_request(self):
+        """Check that a driver cannot create a service request."""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token_driver)
+
+        response = self.client.post(self.url, {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('Drivers cannot create service requests.', str(response.data))
+
+    def test_create_service_request_without_location(self):
+        """Check failure when customer has no location."""
+
+        user_without_location = get_user_model().objects.create_user(
+            username='no_location_user',
+            password='password123',
+            is_driver=False
+        )
+
+        response = self.client.post(self.login_url, {
+                    'username': 'no_location_user',
+                    'password': 'password123'
+                }, format='json')
+        
+        access_token = response.data['access_token']
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + access_token)
+
+        response = self.client.post(self.url, {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('must have at least one location', str(response.data))
+
+    def test_create_service_request_without_available_drivers(self):
+        """Check failure when no drivers are available."""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token_customer)
+
+        # Delete all drivers
+        get_user_model().objects.filter(is_driver=True).delete()
+
+        response = self.client.post(self.url, {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn('No available drivers', str(response.data))
