@@ -4,10 +4,12 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
+from django.utils import timezone
+import json
 from .serializers import UserSerializer, LocationSerializer, ServiceRequestSerializer
 from .utils import nearest_driver, estimated_time, get_latest_user_location
 from .models import ServiceRequest
-import json
+
 
 class RegisterUser(APIView):
     """View for register a new user customer or driver"""
@@ -159,3 +161,37 @@ class ServiceRequestCreate(APIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class CloseServiceRequest(APIView):
+    """Close service request."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Close the service request for the authenticated user."""
+
+        user = request.user
+
+        # Fetch the active service request for the user
+        active_service_request = ServiceRequest.objects.filter(customer=user, is_completed=False).first()
+
+        if not active_service_request:
+            active_service_request = ServiceRequest.objects.filter(driver=user, is_completed=False).first()
+
+        # Check if there is an active service request
+        if not active_service_request:
+            return Response({"detail": "No active service request found."},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        # Mark the service request as completed and set the close_at date
+        active_service_request.is_completed = True
+        active_service_request.close_service_at = timezone.now()  # Set current date and time for close_at
+        active_service_request.save()
+
+        # Return the response indicating that the request was closed
+        response_data = {
+            "id": active_service_request.id,
+            "close_service_at": active_service_request.close_service_at.isoformat()  # Return the close_service_at date in ISO format
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)

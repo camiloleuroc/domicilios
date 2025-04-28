@@ -3,8 +3,9 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase, APIClient
 from django.contrib.auth import get_user_model
-from .models import Location
+from .models import Location, ServiceRequest
 from rest_framework_simplejwt.tokens import RefreshToken
+import json
 
 class UserRegistrationTestCase(TestCase):
     
@@ -321,3 +322,107 @@ class ServiceRequestTestCase(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertIn('No available drivers', str(response.data))
+
+class CloseServiceRequestTest(TestCase):
+
+    def setUp(self):
+        """Data configuration for the test case."""
+        
+        self.client = APIClient()
+        self.login_url = reverse('login')
+        self.endservice_url = reverse('endservice')
+
+        # Create a customer user
+        self.customer = get_user_model().objects.create_user(
+            username="customer1",
+            password="password123",
+            is_driver=False
+        )
+
+        response = self.client.post(self.login_url, {
+                    'username': 'customer1',
+                    'password': 'password123'
+                }, format='json')
+        
+        self.access_token_customer = response.data['access_token']
+
+        # Create a driver user
+        self.driver = get_user_model().objects.create_user(
+            username="driver1",
+            password="password123",
+            is_driver=True
+        )
+
+        response = self.client.post(self.login_url, {
+                    'username': 'driver1',
+                    'password': 'password123'
+                }, format='json')
+        
+        self.access_token_driver = response.data['access_token']
+
+        # Create a service request assigned to the driver (with the customer)
+        self.service_request = ServiceRequest.objects.create(
+            customer=self.customer,
+            driver=self.driver,
+            pickup_location=json.dumps({
+                "id": "12345678-1234-5678-1234-123456789012",
+                "address":"Test Address",
+                "latitude":4.610819,
+                "longitude":-74.156850
+            }),
+            time_minutes=15,
+            distance_km=10,
+            is_completed=False
+        )        
+
+    def test_close_service_request_customer(self):
+        """Check that the customer can close their active service request."""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token_customer)
+
+        response = self.client.post(self.endservice_url, {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(ServiceRequest.objects.get(id=self.service_request.id).is_completed)
+
+        # Ensure that the close_service_at field is updated and in ISO format
+        close_service_at = ServiceRequest.objects.get(id=self.service_request.id).close_service_at
+        self.assertEqual(str(response.data['id']), str(self.service_request.id))
+        self.assertEqual(response.data['close_service_at'], close_service_at.isoformat())
+
+    def test_close_service_request_driver(self):
+        """Check that the driver can close their active service request."""
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token_driver)
+
+        response = self.client.post(self.endservice_url, {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(ServiceRequest.objects.get(id=self.service_request.id).is_completed)
+
+        # Ensure that the close_service_at field is updated and in ISO format
+        close_service_at = ServiceRequest.objects.get(id=self.service_request.id).close_service_at
+        self.assertEqual(str(response.data['id']), str(self.service_request.id))
+        self.assertEqual(response.data['close_service_at'], close_service_at.isoformat())
+
+    def test_close_service_request_no_active_request(self):
+        """Check that a user cannot close a service request if they don't have an active one."""
+
+        # Mark the request as completed
+        self.service_request.is_completed = True
+        self.service_request.save()
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + self.access_token_customer)
+
+        response = self.client.post(self.endservice_url, {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.data['detail'], "No active service request found.")
+
+    def test_close_service_request_not_authenticated(self):
+        """Check that a non-authenticated user cannot close a service request."""
+
+        response = self.client.post(self.endservice_url, {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data['detail'], "Authentication credentials were not provided.")
