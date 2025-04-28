@@ -1,14 +1,15 @@
-from rest_framework import status, permissions
+from rest_framework import status, permissions, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.utils import timezone
 import json
 from .serializers import UserSerializer, LocationSerializer, ServiceRequestSerializer
 from .utils import nearest_driver, estimated_time, get_latest_user_location
-from .models import ServiceRequest
+from .models import ServiceRequest, User, Location
 
 
 class RegisterUser(APIView):
@@ -27,6 +28,73 @@ class RegisterUser(APIView):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class DriverList(APIView):
+    """View to list all drivers"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Retrieve all drivers"""
+
+        drivers = User.objects.filter(is_driver=True)
+        serializer = UserSerializer(drivers, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class UserDetail(APIView):
+    """Retrieve, update, or delete a user"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Retrieve the authenticated user's details"""
+        user = request.user
+
+        # Check if the user is trying to access his own data.
+        if user.id != request.user.id:
+            raise PermissionDenied("You can only view your own details.")
+
+        serializer = UserSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request):
+        """Update the authenticated user's information"""
+        user = request.user
+
+        # Check if the user is trying to access his own data.
+        if user.id != request.user.id:
+            raise PermissionDenied("You can only update your own details.")
+
+        serializer = UserSerializer(user, data=request.data, partial=False)  # Full update
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request):
+        """Update part of the authenticated user's information"""
+        user = request.user
+
+        # Check if the user is trying to access his own data.
+        if user.id != request.user.id:
+            raise PermissionDenied("You can only update your own details.")
+
+        serializer = UserSerializer(user, data=request.data, partial=True)  # Partial update
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request):
+        """Delete the authenticated user's account"""
+        user = request.user
+
+        # Check if the user tries to delete his own account.
+        if user.id != request.user.id:
+            raise PermissionDenied("You can only delete your own account.")
+
+        user.delete()
+        return Response({"detail": "User deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+    
 class Login(APIView):
     """User authentication and JWT token generation."""
 
@@ -55,14 +123,13 @@ class Login(APIView):
         return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
 
 class LocationAssign(APIView):
-    """Assigns a location to the authenticated user."""
+    """Assigns, retrieves, updates, or deletes a location for the authenticated user."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """Get all locations for the authenticated user."""
-        
-        locations = LocationSerializer.get_user_location(request.user)
+        locations = Location.objects.filter(user=request.user)
 
         if locations.exists():
             serializer = LocationSerializer(locations, many=True)
@@ -72,9 +139,8 @@ class LocationAssign(APIView):
 
     def post(self, request):
         """Assign a new location to the authenticated user."""
-        
         data = request.data
-        data['user'] = request.user.id
+        data['user'] = request.user.id  # Ensure the location is linked to the authenticated user
 
         serializer = LocationSerializer(data=data)
 
@@ -83,6 +149,46 @@ class LocationAssign(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, pk=None):
+        """Update a specific location of the authenticated user."""
+        try:
+            location = Location.objects.get(id=pk, user=request.user)
+        except Location.DoesNotExist:
+            return Response({"detail": "Location not found or not owned by you."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = LocationSerializer(location, data=request.data, partial=False)  # Full update
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk=None):
+        """Update part of a specific location of the authenticated user."""
+        try:
+            location = Location.objects.get(id=pk, user=request.user)
+        except Location.DoesNotExist:
+            return Response({"detail": "Location not found or not owned by you."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = LocationSerializer(location, data=request.data, partial=True)  # Partial update
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk=None):
+        """Delete a specific location of the authenticated user."""
+        try:
+            location = Location.objects.get(id=pk, user=request.user)
+        except Location.DoesNotExist:
+            return Response({"detail": "Location not found or not owned by you."}, status=status.HTTP_404_NOT_FOUND)
+
+        location.delete()
+        return Response({"detail": "Location deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
 
 class ServiceRequestCreate(APIView):
     """Allows only non-driver users to create a service request, assigning the nearest driver."""

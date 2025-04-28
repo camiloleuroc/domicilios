@@ -8,28 +8,28 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'password', 'is_driver', 'plate')
+        fields = ('id', 'username', 'password', 'is_driver', 'plate', 'created_at')
         read_only_fields = ('id', 'created_at')
 
-    def create(self, validated_data):
+    # def create(self, validated_data):
 
-        is_driver = validated_data.get('is_driver', False)
-        plate = validated_data.get('plate', None)
+    #     is_driver = validated_data.get('is_driver', False)
+    #     plate = validated_data.get('plate', None)
 
-        if is_driver and (not plate or plate == ""):
-            raise serializers.ValidationError("Plate is required for drivers.")
+    #     if is_driver and (not plate or plate == ""):
+    #         raise serializers.ValidationError("Plate is required for drivers.")
 
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            password=validated_data['password'],
-            is_driver=is_driver
-        )
+    #     user = User.objects.create_user(
+    #         username=validated_data['username'],
+    #         password=validated_data['password'],
+    #         is_driver=is_driver
+    #     )
 
-        if is_driver:
-            user.plate = plate
-            user.save()
+    #     if is_driver:
+    #         user.plate = plate
+    #         user.save()
 
-        return user
+    #     return user
 
 class LocationSerializer(serializers.ModelSerializer):
     """Serializer for location data"""
