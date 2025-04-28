@@ -1,0 +1,6 @@
+# Mantener los archivos shell y scripts con saltos de línea de tipo Unix (LF)
+*.sh text eol=lf
+*.py text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
